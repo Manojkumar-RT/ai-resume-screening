@@ -21,13 +21,30 @@ def extract_email(text):
     return match[0] if match else "Not Found"
 
 def extract_name(text):
-    lines = text.split('\n')
-    for i,line in enumerate(lines):
-        if "@" in line:
-            for j in range(max(0,i-5), i):
-                name = lines[j].strip()
-                if len(name) > 3 and name.replace(" ","").isalpha():
-                    return name.title()
+
+    lines = text.split("\n")
+
+    blacklist = [
+        "resume","curriculum vitae","profile","objective","summary",
+        "contact","education","skills","projects","experience",
+        "declaration","career","personal details"
+    ]
+
+    for line in lines[:25]:  # only top part of resume
+        line_clean = line.strip()
+
+        # skip small lines
+        if len(line_clean) < 5:
+            continue
+
+        # remove unwanted words
+        if any(word in line_clean.lower() for word in blacklist):
+            continue
+
+        # name pattern (2–4 words, alphabets only)
+        if re.match(r'^[A-Z][a-z]+(?:\s[A-Z][a-z]+){1,3}$', line_clean):
+            return line_clean
+
     return "Not Found"
 
 def extract_skills(text):
@@ -100,8 +117,10 @@ if uploaded_files:
                     text += page.extract_text()
 
         # -------- IMPORTANT FIX (ADD HERE) --------
+        # text cleaning
         text = text.replace("|", " ")
-        text = text.replace("  ", " ") 
+        text = text.replace("•", " ")
+        text = re.sub(r'\s+', ' ', text)
 
         name = extract_name(text)
         email = extract_email(text)
