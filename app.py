@@ -1,10 +1,7 @@
 import streamlit as st
 import pandas as pd
 import pdfplumber
-import spacy
 import re
-
-nlp = spacy.load("en_core_web_sm")
 
 st.title("AI Resume Screening System")
 st.write("Upload resumes and the AI will rank candidates automatically.")
@@ -41,6 +38,48 @@ def extract_skills(text):
             found.append(skill)
     return ", ".join(found)
 
+def extract_details(text):
+
+    # PHONE
+    phone_match = re.findall(r'(?:\+91[\-\s]?)?[6-9]\d{9}', text)
+    phone = phone_match[0] if phone_match else "Not Found"
+
+    # EXPERIENCE
+    exp_match = re.findall(r'(\d+)\+?\s*(years|yrs)', text.lower())
+    if exp_match:
+        experience = max([int(x[0]) for x in exp_match])
+    else:
+        experience = 0
+
+    # EDUCATION
+    education_keywords = [
+        "b.tech","btech","b.e","be","m.tech","mtech","b.sc","bsc",
+        "m.sc","msc","bca","mca","phd","mba","bachelor","master"
+    ]
+    education = "Not Found"
+    for word in education_keywords:
+        if word in text.lower():
+            education = word.upper()
+            break
+
+    # CERTIFICATIONS
+    cert_keywords = ["certification","certified","course","training"]
+    certifications = []
+    for line in text.split("\n"):
+        if any(k in line.lower() for k in cert_keywords):
+            certifications.append(line.strip())
+    certifications = ", ".join(certifications) if certifications else "None"
+
+    # PROJECTS
+    project_keywords = ["project","projects","developed","built","created"]
+    projects = []
+    for line in text.split("\n"):
+        if any(k in line.lower() for k in project_keywords):
+            projects.append(line.strip())
+    projects = ", ".join(projects[:3]) if projects else "None"
+
+    return phone, experience, education, certifications, projects
+
 def decision(score):
     if score >= 8:
         return "Selected"
@@ -60,15 +99,71 @@ if uploaded_files:
                 if page.extract_text():
                     text += page.extract_text()
 
+        # -------- IMPORTANT FIX (ADD HERE) --------
+        text = text.replace("|", " ")
+        text = text.replace("  ", " ") 
+
         name = extract_name(text)
         email = extract_email(text)
         skills = extract_skills(text)
-        score = len(skills.split(",")) if skills else 0
+
+        phone, experience, education, certifications, projects = extract_details(text)
+
+        # --- NEW SMART SCORING ---
+        score = 0
+
+        # skills weight
+        if skills and skills != "":
+            skill_count = len([s for s in skills.split(",") if s.strip() != ""])
+            score += skill_count * 2
+
+        # experience weight
+        if experience >= 3:
+            score += 5
+        elif experience >= 1:
+            score += 3
+
+        # education weight
+        if "M" in education:
+            score += 3
+        elif "B" in education:
+            score += 2
+
+        # projects
+        if projects != "None":
+            score += 2
+
+        # certifications
+        if certifications != "None":
+            score += 2
+
         status = decision(score)
 
-        results.append([name,email,skills,score,status])
+        results.append([
+            name,
+            email,
+            phone,
+            experience,
+            education,
+            skills,
+            projects,
+            certifications,
+            score,
+            status
+        ])
 
-    df = pd.DataFrame(results,columns=["Name","Email","Skills","Score","Status"])
+    df = pd.DataFrame(results,columns=[
+    "Name",
+    "Email",
+    "Phone",
+    "Experience(Years)",
+    "Education",
+    "Skills",
+    "Projects",
+    "Certifications",
+    "Score",
+    "Status"
+])
 
     st.subheader("Candidate Ranking")
     st.dataframe(df)
