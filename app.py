@@ -6,8 +6,6 @@ import spacy
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-model = SentenceTransformer('all-MiniLM-L6-v2')
-
 nlp = spacy.load("en_core_web_sm")
 model = SentenceTransformer('all-MiniLM-L6-v2')
 
@@ -18,12 +16,6 @@ job_description = st.text_area(
     "Paste Job Description",
     height=200,
     placeholder="Example: Looking for a Data Scientist with Python, Machine Learning, SQL, Pandas..."
-)
-
-job_description = st.text_area(
-    "Paste Job Description Here",
-    height=200,
-    placeholder="Example: Looking for a Data Scientist with Python, Machine Learning, Pandas, SQL..."
 )
 
 uploaded_files = st.file_uploader(
@@ -136,6 +128,13 @@ def calculate_similarity(resume_text, job_desc):
     if job_desc.strip() == "":
         return 0
 
+    # only important part of resume
+    resume_text = resume_text[:3500]
+
+    # remove emails & phone
+    resume_text = re.sub(r'\S+@\S+', ' ', resume_text)
+    resume_text = re.sub(r'(?:\+91[\-\s]?)?[6-9]\d{9}', ' ', resume_text)
+
     embeddings = model.encode([resume_text, job_desc])
 
     similarity = cosine_similarity(
@@ -181,8 +180,8 @@ if uploaded_files:
 
         phone, experience, education, certifications, projects = extract_details(text)
 
-        # --- NEW SMART SCORING ---
-            score = ml_score
+        # --- ML SCORE ---
+        score = ml_score
 
         status = decision(score)
 
