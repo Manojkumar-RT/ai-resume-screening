@@ -3,11 +3,28 @@ import pandas as pd
 import pdfplumber
 import re
 import spacy
+from sentence_transformers import SentenceTransformer
+from sklearn.metrics.pairwise import cosine_similarity
+
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 nlp = spacy.load("en_core_web_sm")
+model = SentenceTransformer('all-MiniLM-L6-v2')
 
 st.title("AI Resume Screening System")
 st.write("Upload resumes and the AI will rank candidates automatically.")
+
+job_description = st.text_area(
+    "Paste Job Description",
+    height=200,
+    placeholder="Example: Looking for a Data Scientist with Python, Machine Learning, SQL, Pandas..."
+)
+
+job_description = st.text_area(
+    "Paste Job Description Here",
+    height=200,
+    placeholder="Example: Looking for a Data Scientist with Python, Machine Learning, Pandas, SQL..."
+)
 
 uploaded_files = st.file_uploader(
     "Upload PDF resumes", accept_multiple_files=True
@@ -114,13 +131,27 @@ def extract_details(text):
 
     return phone, experience, education, certifications, projects
 
+def calculate_similarity(resume_text, job_desc):
+
+    if job_desc.strip() == "":
+        return 0
+
+    embeddings = model.encode([resume_text, job_desc])
+
+    similarity = cosine_similarity(
+        [embeddings[0]],
+        [embeddings[1]]
+    )[0][0]
+
+    return round(similarity * 100, 2)
+
 def decision(score):
-    if score >= 8:
-        return "Selected"
-    elif score >= 5:
-        return "Consider"
+    if score >= 75:
+        return "Strong Match"
+    elif score >= 50:
+        return "Moderate Match"
     else:
-        return "Rejected"
+        return "Low Match"
 
 if uploaded_files:
 
@@ -146,35 +177,12 @@ if uploaded_files:
         email = extract_email(text)
         skills = extract_skills(text)
 
+        ml_score = calculate_similarity(text, job_description)
+
         phone, experience, education, certifications, projects = extract_details(text)
 
         # --- NEW SMART SCORING ---
-        score = 0
-
-        # skills weight
-        if skills and skills != "":
-            skill_count = len([s for s in skills.split(",") if s.strip() != ""])
-            score += skill_count * 2
-
-        # experience weight
-        if experience >= 3:
-            score += 5
-        elif experience >= 1:
-            score += 3
-
-        # education weight
-        if "M" in education:
-            score += 3
-        elif "B" in education:
-            score += 2
-
-        # projects
-        if projects != "None":
-            score += 2
-
-        # certifications
-        if certifications != "None":
-            score += 2
+            score = ml_score
 
         status = decision(score)
 
