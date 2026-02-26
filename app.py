@@ -2,6 +2,9 @@ import streamlit as st
 import pandas as pd
 import pdfplumber
 import re
+import spacy
+
+nlp = spacy.load("en_core_web_sm")
 
 st.title("AI Resume Screening System")
 st.write("Upload resumes and the AI will rank candidates automatically.")
@@ -22,28 +25,33 @@ def extract_email(text):
 
 def extract_name(text):
 
-    lines = text.split("\n")
+    # take only top area of resume
+    first_part = text[:2500]
 
-    blacklist = [
-        "resume","curriculum vitae","profile","objective","summary",
-        "contact","education","skills","projects","experience",
-        "declaration","career","personal details"
-    ]
+    # remove emails and phones (they confuse AI)
+    first_part = re.sub(r'\S+@\S+', ' ', first_part)
+    first_part = re.sub(r'(?:\+91[\-\s]?)?[6-9]\d{9}', ' ', first_part)
 
-    for line in lines[:25]:  # only top part of resume
-        line_clean = line.strip()
+    doc = nlp(first_part)
 
-        # skip small lines
-        if len(line_clean) < 5:
-            continue
+    candidates = []
 
-        # remove unwanted words
-        if any(word in line_clean.lower() for word in blacklist):
-            continue
+    for ent in doc.ents:
+        if ent.label_ == "PERSON":
+            name = ent.text.strip()
 
-        # name pattern (2–4 words, alphabets only)
-        if re.match(r'^[A-Z][a-z]+(?:\s[A-Z][a-z]+){1,3}$', line_clean):
-            return line_clean
+            # filtering garbage detections
+            if len(name.split()) >= 2 and len(name) < 40:
+                blacklist = [
+                    "resume","curriculum","vitae","profile",
+                    "objective","declaration","education","project"
+                ]
+
+                if not any(b in name.lower() for b in blacklist):
+                    candidates.append(name.title())
+
+    if candidates:
+        return candidates[0]
 
     return "Not Found"
 
@@ -62,11 +70,12 @@ def extract_details(text):
     phone = phone_match[0] if phone_match else "Not Found"
 
     # EXPERIENCE
-    exp_match = re.findall(r'(\d+)\+?\s*(years|yrs)', text.lower())
-    if exp_match:
-        experience = max([int(x[0]) for x in exp_match])
-    else:
-        experience = 0
+    # EXPERIENCE (improved)
+    experience = 0
+
+    exp_patterns = re.findall(r'(\d+(?:\.\d+)?)\s*(?:years?|yrs?)', text.lower())
+    if exp_patterns:
+        experience = int(float(max(exp_patterns)))
 
     # EDUCATION
     education_keywords = [
@@ -79,21 +88,27 @@ def extract_details(text):
             education = word.upper()
             break
 
-    # CERTIFICATIONS
     cert_keywords = ["certification","certified","course","training"]
     certifications = []
-    for line in text.split("\n"):
-        if any(k in line.lower() for k in cert_keywords):
-            certifications.append(line.strip())
-    certifications = ", ".join(certifications) if certifications else "None"
 
-    # PROJECTS
-    project_keywords = ["project","projects","developed","built","created"]
+    for line in text.split("."):
+        if any(k in line.lower() for k in cert_keywords):
+            if len(line) > 15 and "@" not in line:
+                certifications.append(line.strip())
+    certifications = ", ".join(certifications[:3]) if certifications else "None"
+
+    # PROJECTS (improved)
+    project_keywords = ["project", "projects"]
     projects = []
-    for line in text.split("\n"):
+
+    lines = text.split(".")
+    for line in lines:
         if any(k in line.lower() for k in project_keywords):
-            projects.append(line.strip())
-    projects = ", ".join(projects[:3]) if projects else "None"
+            if len(line) > 20 and len(line) < 200:
+                if not re.search(r'\d{10}', line) and "@" not in line:
+                    projects.append(line.strip())
+
+    projects = ", ".join(projects[:2]) if projects else "None"
 
     return phone, experience, education, certifications, projects
 
