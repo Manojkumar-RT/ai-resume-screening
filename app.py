@@ -25,33 +25,35 @@ def extract_email(text):
 
 def extract_name(text):
 
-    # take only top area of resume
-    first_part = text[:2500]
+    first_part = text[:2000]
 
-    # remove emails and phones (they confuse AI)
+    # remove emails and phones
     first_part = re.sub(r'\S+@\S+', ' ', first_part)
     first_part = re.sub(r'(?:\+91[\-\s]?)?[6-9]\d{9}', ' ', first_part)
 
+    # ---------- METHOD 1 : spaCy ----------
     doc = nlp(first_part)
-
-    candidates = []
-
     for ent in doc.ents:
         if ent.label_ == "PERSON":
             name = ent.text.strip()
-
-            # filtering garbage detections
             if len(name.split()) >= 2 and len(name) < 40:
-                blacklist = [
-                    "resume","curriculum","vitae","profile",
-                    "objective","declaration","education","project"
-                ]
+                return name.title()
 
-                if not any(b in name.lower() for b in blacklist):
-                    candidates.append(name.title())
+    # ---------- METHOD 2 : Header Detection (VERY POWERFUL) ----------
+    lines = first_part.split("\n")
 
-    if candidates:
-        return candidates[0]
+    for line in lines[:10]:  # only top lines
+        line = line.strip()
+
+        # detect uppercase names
+        if (
+            len(line.split()) >= 2
+            and len(line) < 35
+            and line.replace(" ", "").isalpha()
+        ):
+            blacklist = ["resume","curriculum","vitae","profile","email","phone"]
+            if not any(b in line.lower() for b in blacklist):
+                return line.title()
 
     return "Not Found"
 
@@ -132,10 +134,13 @@ if uploaded_files:
                     text += page.extract_text()
 
         # -------- IMPORTANT FIX (ADD HERE) --------
-        # text cleaning
+        # text cleaning (SAFE CLEANING)
         text = text.replace("|", " ")
         text = text.replace("•", " ")
-        text = re.sub(r'\s+', ' ', text)
+        text = text.replace("\t", " ")
+
+        # remove multiple spaces but KEEP new lines
+        text = re.sub(r' +', ' ', text)
 
         name = extract_name(text)
         email = extract_email(text)
