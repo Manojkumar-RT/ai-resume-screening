@@ -133,18 +133,17 @@ def calculate_similarity(resume_text, job_desc):
     if job_desc.strip() == "":
         return 0
 
-    # only important part of resume
     resume_text = resume_text[:3500]
-
-    # remove emails & phone
     resume_text = re.sub(r'\S+@\S+', ' ', resume_text)
     resume_text = re.sub(r'(?:\+91[\-\s]?)?[6-9]\d{9}', ' ', resume_text)
 
-    embeddings = model.encode([resume_text, job_desc])
+    # encode separately
+    resume_embedding = model.encode(resume_text)
+    job_embedding = model.encode(job_desc)
 
     similarity = cosine_similarity(
-        [embeddings[0]],
-        [embeddings[1]]
+        [resume_embedding],
+        [job_embedding]
     )[0][0]
 
     return round(similarity * 100, 2)
@@ -159,6 +158,7 @@ def decision(score):
 
 if uploaded_files and job_description.strip() == "":
     st.warning("⚠ Please paste a Job Description first.")
+    st.stop()
 
 if uploaded_files:
 
@@ -223,14 +223,14 @@ if uploaded_files:
     st.subheader("Candidate Ranking (Best match at top)")
     df = df.sort_values(by="Score", ascending=False)
     st.dataframe(df)
-
-import io
+    import io
 
 buffer = io.BytesIO()
 df.to_excel(buffer, index=False, engine='openpyxl')
 
-st.download_button(
+    st.download_button(
     "Download Results (Excel)",
     buffer.getvalue(),
-    "candidates.xlsx"
+    "candidates.xlsx",
+    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
 )
