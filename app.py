@@ -6,8 +6,13 @@ import spacy
 from sentence_transformers import SentenceTransformer
 from sklearn.metrics.pairwise import cosine_similarity
 
-nlp = spacy.load("en_core_web_sm")
-model = SentenceTransformer('all-MiniLM-L6-v2')
+@st.cache_resource
+def load_models():
+    nlp = spacy.load("en_core_web_sm")
+    model = SentenceTransformer('all-MiniLM-L6-v2')
+    return nlp, model
+
+nlp, model = load_models()
 
 st.title("AI Resume Screening System")
 st.write("Upload resumes and the AI will rank candidates automatically.")
@@ -152,6 +157,9 @@ def decision(score):
     else:
         return "Low Match"
 
+if uploaded_files and job_description.strip() == "":
+    st.warning("⚠ Please paste a Job Description first.")
+
 if uploaded_files:
 
     results=[]
@@ -176,7 +184,8 @@ if uploaded_files:
         email = extract_email(text)
         skills = extract_skills(text)
 
-        ml_score = calculate_similarity(text, job_description)
+        important_text = text[:2500] + " " + extract_skills(text)
+        ml_score = calculate_similarity(important_text, job_description)
 
         phone, experience, education, certifications, projects = extract_details(text)
 
@@ -211,11 +220,17 @@ if uploaded_files:
     "Status"
 ])
 
-    st.subheader("Candidate Ranking")
+    st.subheader("Candidate Ranking (Best match at top)")
+    df = df.sort_values(by="Score", ascending=False)
     st.dataframe(df)
 
-    st.download_button(
-        "Download Results (CSV)",
-        df.to_csv(index=False),
-        "candidates.csv"
-    )
+import io
+
+buffer = io.BytesIO()
+df.to_excel(buffer, index=False, engine='openpyxl')
+
+st.download_button(
+    "Download Results (Excel)",
+    buffer.getvalue(),
+    "candidates.xlsx"
+)
