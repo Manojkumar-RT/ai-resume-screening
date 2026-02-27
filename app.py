@@ -39,33 +39,42 @@ def extract_email(text):
 
 def extract_name(text):
 
-    first_part = text[:2000]
+    # Split into lines (IMPORTANT — resumes are line based)
+    lines = text.split("\n")
 
-    # remove emails and phones
-    first_part = re.sub(r'\S+@\S+', ' ', first_part)
-    first_part = re.sub(r'(?:\+91[\-\s]?)?[6-9]\d{9}', ' ', first_part)
+    email = extract_email(text)
 
-    # ---------- METHOD 1 : spaCy ----------
-    doc = nlp(first_part)
-    for ent in doc.ents:
-        if ent.label_ == "PERSON":
-            name = ent.text.strip()
-            if len(name.split()) >= 2 and len(name) < 40:
-                return name.title()
+    if email == "Not Found":
+        return "Not Found"
 
-    # ---------- METHOD 2 : Header Detection (VERY POWERFUL) ----------
-    lines = first_part.split("\n")
+    # find the line where email appears
+    email_index = -1
+    for i, line in enumerate(lines):
+        if email in line:
+            email_index = i
+            break
 
-    for line in lines[:10]:  # only top lines
+    if email_index == -1:
+        return "Not Found"
+
+    # Check 6 lines ABOVE email (THIS is where name actually exists)
+    possible_names = lines[max(0, email_index-6):email_index]
+
+    for line in reversed(possible_names):
         line = line.strip()
 
-        # detect uppercase names
+        # filters
         if (
-            len(line.split()) >= 2
-            and len(line) < 35
-            and line.replace(" ", "").isalpha()
+            5 < len(line) < 40 and
+            len(line.split()) >= 2 and
+            line.replace(" ", "").isalpha()
         ):
-            blacklist = ["resume","curriculum","vitae","profile","email","phone"]
+            blacklist = [
+                "resume","curriculum","vitae","email","phone",
+                "education","skills","projects","objective",
+                "profile","declaration","certification"
+            ]
+
             if not any(b in line.lower() for b in blacklist):
                 return line.title()
 
@@ -168,17 +177,15 @@ if uploaded_files:
         with pdfplumber.open(file) as pdf:
             text=""
             for page in pdf.pages:
-                if page.extract_text():
-                    text += page.extract_text()
+                page_text = page.extract_text(x_tolerance=2, y_tolerance=2)
+                if page_text:
+                    text += page_text + "\n"
 
         # -------- IMPORTANT FIX (ADD HERE) --------
         # text cleaning (SAFE CLEANING)
         text = text.replace("|", " ")
         text = text.replace("•", " ")
         text = text.replace("\t", " ")
-
-        # remove multiple spaces but KEEP new lines
-        text = re.sub(r' +', ' ', text)
 
         name = extract_name(text)
         email = extract_email(text)
