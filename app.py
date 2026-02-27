@@ -223,14 +223,15 @@ if uploaded_files:
     st.subheader("Candidate Ranking (Best match at top)")
     df = df.sort_values(by="Score", ascending=False)
     st.dataframe(df)
-    import io
 
-buffer = io.BytesIO()
-df.to_excel(buffer, index=False, engine='openpyxl')
+    # ---- Excel Download ----
+    import io
+    buffer = io.BytesIO()
+    df.to_excel(buffer, index=False, engine='openpyxl')
 
     st.download_button(
-    "Download Results (Excel)",
-    buffer.getvalue(),
-    "candidates.xlsx",
-    mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-)
+        "Download Results (Excel)",
+        buffer.getvalue(),
+        "candidates.xlsx",
+        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+    )
